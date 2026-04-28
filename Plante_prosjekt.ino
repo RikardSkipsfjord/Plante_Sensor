@@ -13,8 +13,8 @@ const int SOIL_PIN = A0;
 int SOIL_DRY = 800;  // tørr luft/tørr jord
 int SOIL_WET = 350;  // vann / veldig våt jord
 
-char ssid[] = "Rikard :D";
-char pass[] = "yitqcedfaisud";
+char ssid[] = "XXX;
+char pass[] = "XXX";
 
 const char serverAddress[] = "10.0.0.84";
 const int serverPort = 5000;
