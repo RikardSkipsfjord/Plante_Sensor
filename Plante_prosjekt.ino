@@ -16,7 +16,7 @@ int SOIL_WET = 350;  // vann / veldig våt jord
 char ssid[] = "XXX;
 char pass[] = "XXX";
 
-const char serverAddress[] = "10.0.0.84";
+const char serverAddress[] = "X.X.X.X";
 const int serverPort = 5000;
 
 WiFiClient wifi;
