@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sensor Dashboard</title>
+
+  <script src="chart.umd.js"></script>
+
+  <style>
+    :root{
+      --bg:#1f2328; --panel:#272c33; --panel2:#2b313a;
+      --text:#e9eef5; --muted:#a9b4c2; --border:#3b444f;
+      --accent:#66b3ff; --danger:#ff6b6b;
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;
+      background:linear-gradient(180deg,#1b1f24, var(--bg)); color:var(--text);}
+    .wrap{max-width:980px; margin:0 auto; padding:18px;}
+    header{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px;}
+    h1{font-size:20px; margin:0; letter-spacing:.2px;}
+    .tabs{display:flex; gap:10px;}
+    .btn{
+      appearance:none; border:1px solid var(--border); background:var(--panel);
+      color:var(--text); padding:10px 12px; border-radius:12px; cursor:pointer;
+      font-weight:600; font-size:14px;
+    }
+    .btn:hover{background:var(--panel2)}
+    .btn.active{border-color:rgba(102,179,255,.7); box-shadow:0 0 0 2px rgba(102,179,255,.15) inset;}
+    .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px;}
+    .card{
+      background:rgba(39,44,51,.92); border:1px solid var(--border); border-radius:var(--radius);
+      padding:14px; box-shadow:0 6px 18px rgba(0,0,0,.18);
+    }
+    .label{color:var(--muted); font-size:12px; margin-bottom:6px;}
+    .big{font-size:42px; font-weight:800; line-height:1.05;}
+    .sub{color:var(--muted); font-size:13px; margin-top:6px;}
+    .sectionTitle{margin:16px 0 10px; font-size:14px; color:var(--muted); font-weight:700; letter-spacing:.2px;}
+    .chartCard{padding:12px 14px;}
+    canvas{width:100% !important; max-height:260px;}
+    .row2{display:grid; grid-template-columns:1fr; gap:10px;}
+    @media (min-width:720px){ .row2{grid-template-columns:1fr 1fr;} }
+    .kv{display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid rgba(59,68,79,.6);}
+    .kv:last-child{border-bottom:none}
+    .k{color:var(--muted)}
+    .v{font-weight:700}
+    .hint{font-size:12px; color:var(--muted); margin-top:10px}
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Sensor Dashboard</h1>
+      <div class="tabs">
+        <button id="btn-main" class="btn active" onclick="showTab('main')">Oversikt</button>
+        <button id="btn-tech" class="btn" onclick="showTab('tech')">Teknisk</button>
+      </div>
+    </header>
+
+    <!-- Oversikt -->
+    <section id="tab-main">
+      <div class="grid">
+        <div class="card">
+          <div class="label">Temperature</div>
+          <div class="big" id="temp">--.- &deg;C</div>
+          <div class="sub" id="time">--</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Humidity</div>
+          <div class="big" id="hum">--.- %</div>
+          <div class="sub">&nbsp;</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Soil moisture</div>
+          <div class="big" id="soil">-- %</div>
+          <div class="sub" id="soilraw">raw: --</div>
+        </div>
+      </div>
+
+      <div class="sectionTitle">History</div>
+      <div class="card chartCard">
+        <canvas id="chart" height="140"></canvas>
+        <div class="hint" id="chartHint"></div>
+      </div>
+    </section>
+
+    <!-- Teknisk -->
+    <section id="tab-tech" style="display:none;">
+      <div class="card">
+        <div class="sectionTitle" style="margin-top:0;">Teknisk</div>
+        <div class="row2">
+          <div>
+            <div class="kv"><div class="k">Device ID</div><div class="v" id="tech-device">--</div></div>
+            <div class="kv"><div class="k">Uptime</div><div class="v" id="tech-uptime">--</div></div>
+            <div class="kv"><div class="k">WiFi RSSI</div><div class="v" id="tech-rssi">--</div></div>
+            <div class="kv"><div class="k">Last seen</div><div class="v" id="tech-lastseen">--</div></div>
+          </div>
+          <div>
+            <div class="kv"><div class="k">API</div><div class="v" id="tech-api">--</div></div>
+            <div class="kv"><div class="k">Status</div><div class="v" id="tech-status">--</div></div>
+            <div class="kv"><div class="k">Soil (raw)</div><div class="v" id="tech-soilraw">--</div></div>
+            <div class="kv"><div class="k">Soil (%)</div><div class="v" id="tech-soilpct">--</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // === Config ===
+    const SERVER = "http://10.0.0.84:5000";
+    const REFRESH_MS = 5000;
+    const ONLINE_SEC = 15;
+
+    // === Elements ===
+    const tempEl = document.getElementById("temp");
+    const humEl  = document.getElementById("hum");
+    const timeEl = document.getElementById("time");
+    const soilEl = document.getElementById("soil");
+    const soilRawEl = document.getElementById("soilraw");
+
+    const techDevice = document.getElementById("tech-device");
+    const techUptime = document.getElementById("tech-uptime");
+    const techRssi   = document.getElementById("tech-rssi");
+    const techLast   = document.getElementById("tech-lastseen");
+    const techApi    = document.getElementById("tech-api");
+    const techStatus = document.getElementById("tech-status");
+    const techSoilRaw = document.getElementById("tech-soilraw");
+    const techSoilPct = document.getElementById("tech-soilpct");
+
+    const chartHint = document.getElementById("chartHint");
+
+    function showTab(name) {
+      document.getElementById("tab-main").style.display = (name === "main") ? "" : "none";
+      document.getElementById("tab-tech").style.display = (name === "tech") ? "" : "none";
+      document.getElementById("btn-main").classList.toggle("active", name === "main");
+      document.getElementById("btn-tech").classList.toggle("active", name === "tech");
+    }
+
+    function formatUptime(sec) {
+      sec = Number(sec || 0);
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = Math.floor(sec % 60);
+      return `${h}h ${m}m ${s}s`;
+    }
+
+    function safeTimeHHMMSS(iso) {
+      if (!iso || typeof iso !== "string") return "--:--:--";
+      return iso.slice(11, 19);
+    }
+
+    // === Chart setup (graceful if Chart.js missing) ===
+    let chart = null;
+    function initChart() {
+      if (!window.Chart) {
+        chartHint.textContent = "Chart.js lastet ikke. (Hvis Pi mangler internett: last chart.umd.js lokalt og bruk lokal src.)";
+        return;
+      }
+      const ctx = document.getElementById("chart").getContext("2d");
+      chart = new Chart(ctx, {
+        type: "line",
+        data: { labels: [], datasets: [
+          { label: "Temperature (&deg;C)", data: [] },
+          { label: "Humidity (%)", data: [] },
+          { label: "Soil (%)", data: [] }
+        ]},
+        options: {
+          responsive: true,
+          animation: false,
+          plugins: { legend: { labels: { color: "#e9eef5" } } },
+          scales: {
+            x: { ticks: { maxTicksLimit: 8, color: "#a9b4c2" }, grid: { color: "rgba(59,68,79,.35)" } },
+            y: { ticks: { color: "#a9b4c2" }, grid: { color: "rgba(59,68,79,.35)" } }
+          }
+        }
+      });
+    }
+
+    function setSoilColor(pct) {
+      if (pct == null) { soilEl.style.color = ""; return; }
+      const n = Number(pct);
+      if (n < 20) soilEl.style.color = "var(--danger)";
+      else if (n < 40) soilEl.style.color = "#ffcc66";
+      else soilEl.style.color = "#7ee787";
+    }
+
+    function setOnlineStatus(created_at) {
+      if (!created_at) { techStatus.textContent = "--"; return; }
+      const last = new Date(created_at);
+      const diffSec = (Date.now() - last.getTime()) / 1000;
+      techStatus.textContent = (diffSec <= ONLINE_SEC) ? "ONLINE" : `OFFLINE (${Math.floor(diffSec)}s)`;
+      techStatus.style.color = (diffSec <= ONLINE_SEC) ? "#7ee787" : "var(--danger)";
+    }
+
+    async function refresh() {
+      // Latest
+      try {
+        techApi.textContent = "OK";
+        techApi.style.color = "#7ee787";
+
+        const latestRes = await fetch(`${SERVER}/latest`, { cache: "no-store" });
+        if (!latestRes.ok) throw new Error(`latest ${latestRes.status}`);
+        const d = await latestRes.json();
+
+        tempEl.innerHTML = `${Number(d.temperature).toFixed(1)} &deg;C`;
+        humEl.textContent = `${Number(d.humidity).toFixed(1)} %`;
+        timeEl.textContent = `CET/CEST: ${d.created_at ?? "--"}`;
+
+        soilEl.textContent = `${d.soil_pct ?? "--"} %`;
+        soilRawEl.textContent = `raw: ${d.soil_raw ?? "--"}`;
+        setSoilColor(d.soil_pct);
+
+        techDevice.textContent = d.device_id ?? "--";
+        techUptime.textContent = (d.uptime_s != null) ? formatUptime(d.uptime_s) : "--";
+        techRssi.textContent = (d.rssi != null) ? `${d.rssi} dBm` : "--";
+        techLast.textContent = d.created_at ?? "--";
+        techSoilRaw.textContent = d.soil_raw ?? "--";
+        techSoilPct.textContent = d.soil_pct ?? "--";
+        setOnlineStatus(d.created_at);
+      } catch (e) {
+        techApi.textContent = "FEIL";
+        techApi.style.color = "var(--danger)";
+        chartHint.textContent = "Klarer ikke hente data fra API. Sjekk nettverk/firewall og at SERVER-IP stemmer.";
+        // Ikke return; vi kan fortsatt prove history senere
+      }
+
+      // History
+      try {
+        const histRes = await fetch(`${SERVER}/history?limit=50`, { cache: "no-store" });
+        if (!histRes.ok) throw new Error(`history ${histRes.status}`);
+        const rows = await histRes.json();
+        rows.reverse();
+
+        if (chart) {
+          chart.data.labels = rows.map(r => safeTimeHHMMSS(r.created_at));
+          chart.data.datasets[0].data = rows.map(r => r.temperature);
+          chart.data.datasets[1].data = rows.map(r => r.humidity);
+          chart.data.datasets[2].data = rows.map(r => r.soil_pct ?? null);
+          chart.update();
+          chartHint.textContent = "";
+        }
+      } catch (e) {
+        if (chart) chartHint.textContent = "Klarer ikke hente historikk akkurat na.";
+      }
+    }
+
+    initChart();
+    refresh();
+    setInterval(refresh, REFRESH_MS);
+  </script>
+</body>
+</html>
